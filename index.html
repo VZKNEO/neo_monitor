@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEO Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080a0d;
+  --surface: #0e1117;
+  --surface2: #151920;
+  --border: #1c2230;
+  --border2: #252e3d;
+  --text: #8a96a8;
+  --text-dim: #3d4a5c;
+  --text-bright: #d4dce8;
+  --amber: #f5a623;
+  --amber-dim: #2a1e08;
+  --amber-glow: rgba(245,166,35,0.12);
+  --green: #2ecc71;
+  --red: #e74c3c;
+  --blue: #3498db;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 13px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* SCANLINES */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 52px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logo-box {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--amber);
+  display: grid;
+  place-items: center;
+  color: var(--amber);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  box-shadow: 0 0 8px var(--amber-glow);
+}
+.logo-title {
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--text-bright);
+  text-transform: uppercase;
+}
+.logo-sub {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.clock {
+  font-size: 11px;
+  color: var(--amber);
+  letter-spacing: 0.1em;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* LAYOUT */
+.app {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: calc(100vh - 52px);
+}
+
+/* SIDEBAR */
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.sidebar-section {
+  border-bottom: 1px solid var(--border);
+  padding: 16px;
+}
+.sidebar-label {
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* STEP INDICATOR */
+.steps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.step {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--border2);
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+.step.active {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: var(--amber-dim);
+}
+.step-num {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+/* SELECT CUSTOM */
+.select-wrap {
+  position: relative;
+  margin-bottom: 10px;
+}
+.select-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: block;
+}
+select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 7px 28px 7px 10px;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%233d4a5c'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+select:hover, select:focus { border-color: var(--amber); }
+
+/* PERIOD BUTTONS */
+.period-btns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.period-btn {
+  padding: 6px 0;
+  border: 1px solid var(--border2);
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+  text-align: center;
+}
+.period-btn:hover { border-color: var(--amber); color: var(--amber); }
+.period-btn.active { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+
+/* SERIES LIST */
+.series-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.series-list::-webkit-scrollbar { width: 3px; }
+.series-list::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.series-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+.series-item:hover { border-color: var(--border2); background: var(--surface2); }
+.series-item.selected { border-color: var(--amber); background: var(--amber-dim); }
+.series-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.series-name {
+  font-size: 11px;
+  color: var(--text-bright);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.series-item.selected .series-name { color: var(--amber); }
+
+/* STATS PANEL */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.stat-card {
+  padding: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.stat-ticker {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+.stat-val {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.stat-meta {
+  font-size: 9px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 6px;
+}
+.stat-meta span { color: var(--text); }
+
+/* MAIN AREA */
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* TOOLBAR */
+.toolbar {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.toolbar-title {
+  font-size: 11px;
+  color: var(--text-bright);
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+.toolbar-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+.btn-clear {
+  padding: 5px 12px;
+  border: 1px solid var(--border2);
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  transition: all 0.15s;
+}
+.btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+/* CHART AREA */
+.chart-wrap {
+  flex: 1;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.chart-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* EMPTY STATE */
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  pointer-events: none;
+}
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  border: 1px solid var(--border2);
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-size: 24px;
+}
+.empty-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  text-align: center;
+  line-height: 1.8;
+}
+
+/* LOADING */
+#loader {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  z-index: 500;
+}
+.loader-box {
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--amber);
+  display: grid;
+  place-items: center;
+  color: var(--amber);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  animation: flicker 1.5s ease-in-out infinite;
+  box-shadow: 0 0 20px var(--amber-glow);
+}
+.loader-text {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+.loader-bar {
+  width: 200px;
+  height: 1px;
+  background: var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.loader-bar::after {
+  content: '';
+  position: absolute;
+  left: -40%;
+  top: 0;
+  width: 40%;
+  height: 100%;
+  background: var(--amber);
+  animation: slide 1.2s ease-in-out infinite;
+}
+@keyframes slide { to { left: 140%; } }
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  94% { opacity: 0.4; }
+  96% { opacity: 1; }
+  98% { opacity: 0.4; }
+}
+
+/* ERROR */
+.error-banner {
+  display: none;
+  background: rgba(231,76,60,0.1);
+  border-bottom: 1px solid rgba(231,76,60,0.3);
+  padding: 8px 24px;
+  font-size: 10px;
+  color: var(--red);
+  letter-spacing: 0.05em;
+}
+
+/* DEMO BADGE */
+.demo-badge {
+  display: none;
+  background: var(--amber-dim);
+  border-bottom: 1px solid rgba(245,166,35,0.3);
+  padding: 6px 24px;
+  font-size: 10px;
+  color: var(--amber);
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+/* CHART LEGEND CUSTOM */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 20px 12px;
+  flex-shrink: 0;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.legend-swatch {
+  width: 20px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* STATS ROW */
+.stats-row {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.stats-row::-webkit-scrollbar { height: 3px; }
+.stats-row::-webkit-scrollbar-thumb { background: var(--border2); }
+
+.stat-col {
+  flex: 0 0 auto;
+  min-width: 120px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--border);
+}
+.stat-col-ticker {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stat-col-ticker::before {
+  content: '';
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.stat-col-val {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-row-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 9px;
+  color: var(--text-dim);
+}
+.stat-row-meta b {
+  color: var(--text);
+  font-weight: 400;
+}
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="loader-box">NEO</div>
+  <div class="loader-text">Carregando dados</div>
+  <div class="loader-bar"></div>
+</div>
+
+<div class="error-banner" id="error-banner"></div>
+<div class="demo-badge" id="demo-badge">MODO DEMONSTRACAO — configure DATA_URL no codigo com o link do OneDrive</div>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-box">NEO</div>
+    <div>
+      <div class="logo-title">Monitor de Séries</div>
+      <div class="logo-sub">Equity Research · Análise Histórica</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="status-dot"></div>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Configuração</div>
+      <div class="select-wrap">
+        <span class="select-label">1. Tipo de dado</span>
+        <select id="sel-tipo">
+          <option value="">— Selecione —</option>
+        </select>
+      </div>
+      <div class="select-wrap">
+        <span class="select-label">2. Ativos disponíveis</span>
+        <div class="series-list" id="series-list">
+          <div style="font-size:10px;color:var(--text-dim);padding:8px 0;">Selecione um tipo de dado primeiro</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Período</div>
+      <div class="period-btns">
+        <button class="period-btn" data-days="21">1M</button>
+        <button class="period-btn" data-days="63">3M</button>
+        <button class="period-btn active" data-days="126">6M</button>
+        <button class="period-btn" data-days="252">1A</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1">
+      <div class="sidebar-label">Selecionados</div>
+      <div id="selected-count" style="font-size:10px;color:var(--text-dim);margin-bottom:8px;">Nenhum ativo selecionado</div>
+      <button class="btn-clear" id="btn-clear" style="width:100%">Limpar seleção</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="toolbar">
+      <div class="toolbar-title" id="toolbar-title">Selecione um tipo de dado e ativos para visualizar</div>
+      <div class="toolbar-meta" id="toolbar-meta"></div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">◈</div>
+        <div class="empty-text">
+          Selecione um tipo de dado<br>e ao menos um ativo<br>para visualizar a série histórica
+        </div>
+      </div>
+      <div class="chart-container" id="chart-container" style="display:none;">
+        <canvas id="main-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-legend" id="chart-legend"></div>
+
+    <div class="stats-row" id="stats-row"></div>
+  </main>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURAÇÃO
+// ============================================================
+const DATA_URL = 'https://neo1.sharepoint.com/:u:/s/neo_equities/IQAGGkeW-2MsQZ0f0_yNY_ykAYUWC27YTq2KXyPPrEqwULk?e=MT7iNM'; // ← cole o link do OneDrive aqui
+
+// ============================================================
+// PALETA DE CORES
+// ============================================================
+const PALETTE = [
+  '#f5a623','#3498db','#2ecc71','#e74c3c','#9b59b6',
+  '#1abc9c','#e67e22','#34495e','#f39c12','#16a085',
+  '#8e44ad','#27ae60','#2980b9','#c0392b','#d35400',
+  '#7f8c8d','#bdc3c7','#95a5a6','#ecf0f1','#2c3e50'
+];
+
+// ============================================================
+// DADOS DE DEMONSTRAÇÃO
+// ============================================================
+function genDemo() {
+  const tickers = [
+    {ticker:'WEGE3 BZ EQUITY', tipo:'BEST_PE_RATIO', base:25, vol:2},
+    {ticker:'ABBN SW EQUITY',  tipo:'BEST_PE_RATIO', base:30, vol:2},
+    {ticker:'6501 JP EQUITY',  tipo:'BEST_PE_RATIO', base:21, vol:2},
+    {ticker:'ETN US EQUITY',   tipo:'BEST_PE_RATIO', base:26, vol:2},
+    {ticker:'ENR GY EQUITY',   tipo:'BEST_PE_RATIO', base:29, vol:2},
+    {ticker:'RENT3 BZ EQUITY', tipo:'BEST_PE_RATIO', base:10, vol:1},
+    {ticker:'GGPS3 BZ EQUITY', tipo:'BEST_PE_RATIO', base:10, vol:1},
+  ];
+  const rows = [];
+  const today = new Date();
+  for (let d = 251; d >= 0; d--) {
+    const dt = new Date(today);
+    dt.setDate(dt.getDate() - d);
+    if (dt.getDay() === 0 || dt.getDay() === 6) continue;
+    const row = { data: dt.toLocaleDateString('pt-BR') };
+    tickers.forEach(t => {
+      row[t.ticker + '||' + t.tipo] = +(t.base + (Math.random()-0.5)*t.vol*2 + Math.sin(d/20)*t.vol*0.5).toFixed(2);
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+// ============================================================
+// ESTADO
+// ============================================================
+let allData = [];
+let tipoMap = {}; // tipo -> [tickers]
+let selectedTipo = '';
+let selectedTickers = [];
+let activeDays = 126;
+let activeChart = null;
+
+// ============================================================
+// LOAD
+// ============================================================
+async function loadData() {
+  if (!DATA_URL) {
+    allData = genDemo();
+    document.getElementById('demo-badge').style.display = 'block';
+    return;
+  }
+  try {
+    const r = await fetch(DATA_URL + '&t=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const json = await r.json();
+    const parsed = parseSiteData(json);
+    allData = parsed || genDemo();
+    if (!parsed) {
+      document.getElementById('demo-badge').style.display = 'block';
+      document.getElementById('demo-badge').textContent = 'AVISO: site_data nao encontrado no JSON — exibindo demonstracao';
+    }
+  } catch(e) {
+    allData = genDemo();
+    document.getElementById('demo-badge').style.display = 'block';
+    const eb = document.getElementById('error-banner');
+    eb.style.display = 'block';
+    eb.textContent = 'Erro ao carregar: ' + e.message + ' — exibindo demonstração';
+  }
+}
+
+function parseSiteData(json) {
+  // site_data é array de {ticker, tipo, dados:[{d,v}]}
+  if (json.site_data && Array.isArray(json.site_data) && json.site_data.length > 0) {
+    return json.site_data;
+  }
+  return null; // null = usar demo
+}
+
+// ============================================================
+// BUILD TIPO MAP
+// ============================================================
+function buildTipoMap() {
+  tipoMap = {};
+  if (!allData || !allData.length) return;
+
+  if (Array.isArray(allData) && allData[0] && allData[0].ticker) {
+    // Formato real: [{ticker, tipo, dados}]
+    allData.forEach(item => {
+      if (!tipoMap[item.tipo]) tipoMap[item.tipo] = [];
+      if (!tipoMap[item.tipo].includes(item.ticker)) {
+        tipoMap[item.tipo].push(item.ticker);
+      }
+    });
+  } else {
+    // Formato demo: [{data, "ticker||tipo": valor}]
+    const keys = Object.keys(allData[0]).filter(k => k !== 'data');
+    keys.forEach(k => {
+      const [ticker, tipo] = k.split('||');
+      if (!tipo) return;
+      if (!tipoMap[tipo]) tipoMap[tipo] = [];
+      if (!tipoMap[tipo].includes(ticker)) tipoMap[tipo].push(ticker);
+    });
+  }
+}
+
+// ============================================================
+// RENDER SELECTS
+// ============================================================
+function renderTipoSelect() {
+  const sel = document.getElementById('sel-tipo');
+  sel.innerHTML = '<option value="">— Selecione —</option>';
+  Object.keys(tipoMap).sort().forEach(tipo => {
+    const opt = document.createElement('option');
+    opt.value = tipo;
+    opt.textContent = tipo;
+    sel.appendChild(opt);
+  });
+}
+
+function renderSeriesList() {
+  const container = document.getElementById('series-list');
+  if (!selectedTipo) {
+    container.innerHTML = '<div style="font-size:10px;color:var(--text-dim);padding:8px 0;">Selecione um tipo de dado primeiro</div>';
+    return;
+  }
+  const tickers = tipoMap[selectedTipo] || [];
+  container.innerHTML = '';
+  tickers.forEach((ticker, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const isSelected = selectedTickers.includes(ticker);
+    const div = document.createElement('div');
+    div.className = 'series-item' + (isSelected ? ' selected' : '');
+    div.innerHTML = `
+      <div class="series-color" style="background:${color}"></div>
+      <span class="series-name">${ticker}</span>
+    `;
+    div.addEventListener('click', () => toggleTicker(ticker));
+    container.appendChild(div);
+  });
+}
+
+// ============================================================
+// TOGGLE TICKER
+// ============================================================
+function toggleTicker(ticker) {
+  if (selectedTickers.includes(ticker)) {
+    selectedTickers = selectedTickers.filter(t => t !== ticker);
+  } else {
+    selectedTickers.push(ticker);
+  }
+  renderSeriesList();
+  updateSelectedCount();
+  renderChart();
+}
+
+function updateSelectedCount() {
+  const el = document.getElementById('selected-count');
+  el.textContent = selectedTickers.length === 0
+    ? 'Nenhum ativo selecionado'
+    : selectedTickers.length + ' ativo(s) selecionado(s)';
+}
+
+// ============================================================
+// FILTER DATA BY PERIOD
+// ============================================================
+function getFilteredData() {
+  // Retorna dados no formato [{data, "ticker||tipo": valor}]
+  if (!allData || !allData.length) return [];
+
+  if (Array.isArray(allData) && allData[0] && allData[0].ticker) {
+    // Formato real: converter para formato interno
+    // Coletar todas as datas únicas
+    const dateSet = new Set();
+    allData.forEach(item => {
+      item.dados.forEach(d => dateSet.add(d.d));
+    });
+    // Ordenar datas (mais antigas primeiro)
+    const dates = Array.from(dateSet).sort((a, b) => {
+      return new Date(a) - new Date(b);
+    });
+    // Pegar só os últimos activeDays dias úteis
+    const slicedDates = new Set(dates.slice(-activeDays));
+
+    // Montar linhas
+    const rowMap = {};
+    slicedDates.forEach(d => { rowMap[d] = { data: d }; });
+
+    allData.forEach(item => {
+      const key = item.ticker + '||' + item.tipo;
+      item.dados.forEach(d => {
+        if (slicedDates.has(d.d)) {
+          if (!rowMap[d.d]) rowMap[d.d] = { data: d.d };
+          rowMap[d.d][key] = d.v;
+        }
+      });
+    });
+
+    return Array.from(slicedDates).map(d => rowMap[d]).filter(Boolean);
+  } else {
+    // Formato demo
+    return allData.slice(-activeDays);
+  }
+}
+
+// ============================================================
+// RENDER CHART
+// ============================================================
+function renderChart() {
+  const empty = document.getElementById('empty-state');
+  const container = document.getElementById('chart-container');
+
+  if (!selectedTickers.length || !selectedTipo) {
+    empty.style.display = 'flex';
+    container.style.display = 'none';
+    document.getElementById('chart-legend').innerHTML = '';
+    document.getElementById('stats-row').innerHTML = '';
+    document.getElementById('toolbar-title').textContent = 'Selecione um tipo de dado e ativos para visualizar';
+    document.getElementById('toolbar-meta').textContent = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  container.style.display = 'block';
+
+  const rows = getFilteredData();
+  const labels = rows.map(r => r.data);
+
+  const datasets = selectedTickers.map((ticker, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const key = ticker + '||' + selectedTipo;
+    const data = rows.map(r => r[key] != null ? r[key] : null);
+    return {
+      label: ticker,
+      data,
+      borderColor: color,
+      backgroundColor: color + '15',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.2,
+      fill: false,
+      spanGaps: true,
+    };
+  });
+
+  if (activeChart) activeChart.destroy();
+
+  const ctx = document.getElementById('main-chart').getContext('2d');
+  activeChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0e1117',
+          borderColor: '#1c2230',
+          borderWidth: 1,
+          titleColor: '#8a96a8',
+          bodyColor: '#d4dce8',
+          titleFont: { family: "'IBM Plex Mono'", size: 10 },
+          bodyFont:  { family: "'IBM Plex Mono'", size: 11 },
+          padding: 10,
+          callbacks: {
+            label: ctx => ' ' + ctx.dataset.label.split(' ')[0] + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : 'N/A')
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#3d4a5c', font: { family: "'IBM Plex Mono'", size: 9 }, maxTicksLimit: 12, maxRotation: 0 },
+          grid: { color: '#1c2230' }
+        },
+        y: {
+          ticks: { color: '#3d4a5c', font: { family: "'IBM Plex Mono'", size: 9 }, callback: v => v.toFixed(1) },
+          grid: { color: '#1c2230' }
+        }
+      }
+    }
+  });
+
+  // Toolbar
+  document.getElementById('toolbar-title').textContent = selectedTipo + ' — ' + selectedTickers.length + ' ativo(s)';
+  const periodLabels = {21:'1 mês',63:'3 meses',126:'6 meses',252:'1 ano'};
+  document.getElementById('toolbar-meta').textContent = periodLabels[activeDays] + ' · ' + rows.length + ' obs.';
+
+  // Legend
+  renderLegend(datasets);
+
+  // Stats
+  renderStats(rows);
+}
+
+// ============================================================
+// LEGEND
+// ============================================================
+function renderLegend(datasets) {
+  const el = document.getElementById('chart-legend');
+  el.innerHTML = datasets.map(ds => `
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:${ds.borderColor}"></div>
+      <span>${ds.label}</span>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function renderStats(rows) {
+  const el = document.getElementById('stats-row');
+  el.innerHTML = selectedTickers.map((ticker, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const key = ticker + '||' + selectedTipo;
+    const vals = rows.map(r => r[key]).filter(v => v != null && !isNaN(v));
+    if (!vals.length) return '';
+    const last = vals[vals.length - 1];
+    const mean = vals.reduce((a,b) => a+b, 0) / vals.length;
+    const variance = vals.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / vals.length;
+    const std = Math.sqrt(variance);
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const shortName = ticker.split(' ')[0];
+    return `
+      <div class="stat-col">
+        <div class="stat-col-ticker" style="--c:${color}">
+          <span style="width:8px;height:2px;background:${color};border-radius:1px;display:inline-block;flex-shrink:0"></span>
+          ${shortName}
+        </div>
+        <div class="stat-col-val">${last.toFixed(2)}</div>
+        <div class="stat-row-meta">
+          <span>μ <b>${mean.toFixed(2)}</b></span>
+          <span>σ <b>${std.toFixed(2)}</b></span>
+          <span>↕ <b>${min.toFixed(1)}-${max.toFixed(1)}</b></span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================
+// CLOCK
+// ============================================================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+document.getElementById('sel-tipo').addEventListener('change', e => {
+  selectedTipo = e.target.value;
+  selectedTickers = [];
+  renderSeriesList();
+  updateSelectedCount();
+  renderChart();
+});
+
+document.querySelectorAll('.period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeDays = parseInt(btn.dataset.days);
+    renderChart();
+  });
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  selectedTickers = [];
+  renderSeriesList();
+  updateSelectedCount();
+  renderChart();
+});
+
+// ============================================================
+// BOOT
+// ============================================================
+(async () => {
+  setInterval(updateClock, 1000);
+  updateClock();
+  await loadData();
+  buildTipoMap();
+  renderTipoSelect();
+  document.getElementById('loader').style.display = 'none';
+})();
+</script>
+</body>
+</html>
