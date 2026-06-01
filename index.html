@@ -715,11 +715,11 @@ async function loadData() {
 }
 
 function parseSiteData(json) {
-  // site_data é array de {ticker, tipo, dados:[{d,v}]}
-  if (json.site_data && Array.isArray(json.site_data) && json.site_data.length > 0) {
-    return json.site_data;
+  // site_data é array direto de {ticker, tipo, dados:[{d,v}]}
+  if (Array.isArray(json) && json.length > 0) {
+    return json;
   }
-  return null; // null = usar demo
+  return null;
 }
 
 // ============================================================
