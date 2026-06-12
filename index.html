@@ -491,6 +491,17 @@ function colorForTicker(ticker) { const list = tipoMap[selectedTipo] || []; cons
 function shortName(ticker) { return ticker.split(' ')[0]; }
 function tickerSuffix(ticker) { return ticker.split(' ').slice(1).join(' '); }
 
+// Retorna {upper, lower} da série no JSON (undefined quando ausente)
+function getThresholds(ticker) {
+  if (!allData || !allData[0] || !allData[0].ticker) return {};
+  const item = allData.find(d => d.ticker === ticker && d.tipo === selectedTipo);
+  if (!item) return {};
+  const out = {};
+  if (item.upper != null && item.upper !== 0) out.upper = item.upper;
+  if (item.lower != null && item.lower !== 0) out.lower = item.lower;
+  return out;
+}
+
 // ============================================================
 // SELECTS
 // ============================================================
@@ -557,20 +568,43 @@ const bandPlugin = {
   beforeDatasetsDraw(chart) {
     const o = chart.$band; if (!o) return;
     const { ctx, chartArea: area, scales } = chart; const y = scales.y;
-    const yMean = y.getPixelForValue(o.mean), yUp = y.getPixelForValue(o.mean + o.std), yDn = y.getPixelForValue(o.mean - o.std);
+    const yMean = y.getPixelForValue(o.mean);
+    const yUp   = y.getPixelForValue(o.mean + o.std);
+    const yDn   = y.getPixelForValue(o.mean - o.std);
     ctx.save();
-    ctx.fillStyle = 'rgba(199,178,125,0.10)'; ctx.fillRect(area.left, yUp, area.right - area.left, yDn - yUp);
+
+    // Faixa ±1σ
+    ctx.fillStyle = 'rgba(199,178,125,0.10)';
+    ctx.fillRect(area.left, yUp, area.right - area.left, yDn - yUp);
     ctx.strokeStyle = 'rgba(199,178,125,0.32)'; ctx.setLineDash([4,4]); ctx.lineWidth = 1;
     [yUp, yDn].forEach(yy => { ctx.beginPath(); ctx.moveTo(area.left, yy); ctx.lineTo(area.right, yy); ctx.stroke(); });
+
+    // Linha da média
     ctx.setLineDash([6,4]); ctx.strokeStyle = 'rgba(243,238,223,0.55)'; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.moveTo(area.left, yMean); ctx.lineTo(area.right, yMean); ctx.stroke();
-    ctx.setLineDash([2,4]); ctx.strokeStyle = 'rgba(105,171,220,0.5)'; ctx.lineWidth = 1;
-    [o.min, o.max].forEach(v => { const yy = y.getPixelForValue(v); ctx.beginPath(); ctx.moveTo(area.left, yy); ctx.lineTo(area.right, yy); ctx.stroke(); });
-    ctx.setLineDash([]); ctx.font = '600 11px "Hanken Grotesk", sans-serif'; ctx.textBaseline = 'middle';
+
+    // Limiares (upper / lower) — apenas quando presentes
+    ctx.setLineDash([5,3]); ctx.lineWidth = 1.5;
+    const labLine = (v, col, label) => {
+      const yy = y.getPixelForValue(v);
+      ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(area.left, yy); ctx.lineTo(area.right, yy); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '600 11px "Hanken Grotesk", sans-serif'; ctx.textBaseline = 'middle';
+      ctx.textAlign = 'right';
+      const w = ctx.measureText(label).width + 12;
+      ctx.fillStyle = 'rgba(0,40,36,0.88)'; ctx.fillRect(area.right - w, yy - 9, w, 18);
+      ctx.fillStyle = col; ctx.fillText(label, area.right - 6, yy);
+      ctx.setLineDash([5,3]);
+    };
+    if (o.upper != null) labLine(o.upper, 'rgba(224,138,91,0.95)', 'upper ' + o.upper.toFixed(2));
+    if (o.lower != null) labLine(o.lower, 'rgba(143,197,106,0.95)', 'lower ' + o.lower.toFixed(2));
+
+    // Rótulo da média
+    ctx.setLineDash([]);
+    ctx.font = '600 11px "Hanken Grotesk", sans-serif'; ctx.textBaseline = 'middle';
     const lab = (txt, yy, col) => { ctx.textAlign = 'right'; const w = ctx.measureText(txt).width + 12; ctx.fillStyle = 'rgba(0,40,36,0.85)'; ctx.fillRect(area.right - w, yy - 9, w, 18); ctx.fillStyle = col; ctx.fillText(txt, area.right - 6, yy); };
-    lab('máx ' + o.max.toFixed(2), y.getPixelForValue(o.max), 'rgba(105,171,220,0.95)');
     lab('μ ' + o.mean.toFixed(2), yMean, 'rgba(243,238,223,0.95)');
-    lab('mín ' + o.min.toFixed(2), y.getPixelForValue(o.min), 'rgba(105,171,220,0.95)');
+
     ctx.restore();
   }
 };
@@ -630,7 +664,15 @@ function renderChart() {
   if (singleSel && showBand) {
     const key = selectedTickers[0] + '||' + selectedTipo;
     const vals = rows.map(r => r[key]).filter(v => v != null && !isNaN(v));
-    if (vals.length) { activeChart.$band = computeStats(vals); activeChart.update('none'); }
+    if (vals.length) {
+      const s = computeStats(vals);
+      const thr = getThresholds(selectedTickers[0]);
+      activeChart.$band = Object.assign(s, {
+        upper: thr.upper != null ? thr.upper : null,
+        lower: thr.lower != null ? thr.lower : null
+      });
+      activeChart.update('none');
+    }
   } else { activeChart.$band = null; }
   document.getElementById('toolbar-title').textContent = tipoLabel(selectedTipo);
   const periodLabels = { 21:'1 mês', 63:'3 meses', 126:'6 meses', 252:'1 ano' };
@@ -688,7 +730,8 @@ function buildContextSummary() {
       ticker + ':\n' +
       '  atual=' + s.last.toFixed(2) + ' | início do período=' + s.first.toFixed(2) + ' | variação=' + (chgPct>=0?'+':'') + chgPct.toFixed(1) + '%\n' +
       '  média=' + s.mean.toFixed(2) + ' | desvio(σ)=' + s.std.toFixed(2) + ' | mín=' + s.min.toFixed(2) + ' | máx=' + s.max.toFixed(2) + '\n' +
-      '  posição atual=' + (z>=0?'+':'') + z.toFixed(2) + 'σ vs média | trajetória: ' + traj
+      '  posição atual=' + (z>=0?'+':'') + z.toFixed(2) + 'σ vs média | trajetória: ' + traj +
+      (() => { const thr = getThresholds(ticker); const parts = []; if (thr.upper != null) parts.push('upper=' + thr.upper.toFixed(2)); if (thr.lower != null) parts.push('lower=' + thr.lower.toFixed(2)); return parts.length ? '\n  limiares de alerta: ' + parts.join(' | ') : ''; })()
     );
   });
   if (!assetSummaries.length) return null;
